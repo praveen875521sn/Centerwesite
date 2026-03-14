@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Center Location Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;
+  --orange:#f97316;--blue:#3b82f6;--green:#10b981;
+  --purple:#a855f7;--red:#ef4444;--teal:#06b6d4;--yellow:#eab308;
+  --radius:12px;--nav-h:64px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* NAV */
+.nav{height:var(--nav-h);background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:24px;position:sticky;top:0;z-index:1000}
+.nav-brand{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--orange);display:flex;align-items:center;gap:10px;white-space:nowrap}
+.nav-brand svg{width:28px;height:28px}
+.nav-tabs{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.nav-tab{padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--muted);transition:all .2s;border:none;background:transparent;white-space:nowrap;font-family:inherit}
+.nav-tab:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.nav-tab.active{background:rgba(249,115,22,.15);color:var(--orange);border:1px solid rgba(249,115,22,.3)}
+
+/* PAGE */
+.page{display:none;padding:24px;gap:20px;flex-direction:column}
+.page.active{display:flex}
+
+/* FILTER BAR */
+.filter-bar{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:5px;min-width:148px;flex:1}
+.fg label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.fg select,.fg input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s;cursor:pointer}
+.fg select:focus,.fg input:focus{border-color:var(--orange)}
+.fg select option{background:var(--panel)}
+.btn{padding:9px 22px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;border:none;align-self:flex-end;white-space:nowrap}
+.btn-apply{background:var(--orange);color:#fff}.btn-apply:hover{opacity:.85}
+.btn-reset{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-reset:hover{border-color:var(--text);color:var(--text)}
+
+/* MAP LEGEND */
+.map-legend{display:flex;flex-wrap:wrap;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+
+/* CARDS */
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden;cursor:default}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--orange));border-radius:var(--radius) var(--radius) 0 0}
+.card-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.card-value{font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:700;color:var(--c,var(--orange));line-height:1}
+.card-sub{font-size:12px;color:var(--muted)}
+.card.c-blue{--c:var(--blue)}.card.c-green{--c:var(--green)}.card.c-purple{--c:var(--purple)}.card.c-red{--c:var(--red)}.card.c-teal{--c:var(--teal)}.card.c-yellow{--c:var(--yellow)}
+
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid-map{display:grid;grid-template-columns:1fr 380px;gap:20px}
+@media(max-width:1100px){.grid2,.grid-map{grid-template-columns:1fr}}
+
+/* PANEL */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-hdr{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.panel-count{font-size:12px;color:var(--muted)}
+
+/* MAP */
+#map,#mp-map{height:460px;width:100%}
+.leaflet-popup-content-wrapper{background:#1e2530!important;color:#e6edf3!important;border:1px solid #30363d!important;border-radius:10px!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important}
+.leaflet-popup-tip{background:#1e2530!important}
+.popup-title{font-weight:600;font-size:13px;margin-bottom:4px;color:var(--orange)}
+.popup-near{font-size:11px;color:var(--muted);margin-bottom:8px}
+.popup-row{font-size:12px;color:var(--muted);margin:2px 0}
+.popup-row span{color:var(--text)}
+.popup-toc{display:inline-block;margin:6px 0;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.popup-link{display:inline-block;margin-top:6px;font-size:11px;background:rgba(249,115,22,.15);color:var(--orange);padding:4px 10px;border-radius:6px;text-decoration:none}
+.popup-link:hover{background:rgba(249,115,22,.3)}
+.popup-mp-list{max-height:120px;overflow-y:auto}
+.popup-mp-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+.popup-mp-role{color:#06b6d4;font-weight:600;margin-left:8px;flex-shrink:0}
+
+/* TABLE */
+.tbl-search{padding:10px 16px;border-bottom:1px solid var(--border)}
+.tbl-search input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;outline:none}
+.tbl-search input:focus{border-color:var(--orange)}
+.tbl-wrap{overflow:auto;max-height:420px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead{position:sticky;top:0;z-index:5}
+thead th{background:rgba(22,27,34,.97);padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:9px 14px;border-bottom:1px solid rgba(48,54,61,.5);color:var(--text);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.b-active{background:rgba(16,185,129,.15);color:var(--green)}
+.b-inactive{background:rgba(239,68,68,.12);color:var(--red)}
+
+/* CHART */
+.chart-wrap{padding:20px}
+canvas{max-height:300px}
+
+/* STAT BARS */
+.emp-bar-wrap{padding:16px 20px;max-height:400px;overflow-y:auto}
+.stat-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.stat-name{font-size:12px;color:var(--muted);width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.stat-track{flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:8px;overflow:hidden}
+.stat-fill{height:100%;border-radius:4px;transition:width .5s ease}
+.stat-num{font-size:12px;font-weight:600;width:50px;text-align:right;color:var(--text)}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;min-height:180px;color:var(--muted);gap:10px;font-size:14px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <svg viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="13" stroke="#f97316" stroke-width="2"/><path d="M14 7C14 7 9 12 9 16C9 18.76 11.24 21 14 21C16.76 21 19 18.76 19 16C19 12 14 7 14 7Z" fill="#f97316" opacity=".8"/><circle cx="14" cy="16" r="3" fill="white" opacity=".9"/></svg>
+    Center Location
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchPage('active-centers',this)">📍 Active Centers</button>
+    <button class="nav-tab" onclick="switchPage('qp-criteria',this)">📋 QP &amp; Criteria</button>
+    <button class="nav-tab" onclick="switchPage('impact',this)">📊 Impact</button>
+    <button class="nav-tab" onclick="switchPage('manpower',this)">👥 Manpower</button>
+    <button class="nav-tab" onclick="switchPage('employer',this)">🏢 Employer Master</button>
+    <button class="nav-tab" onclick="switchPage('migrant',this)">🌍 Migrant Data</button>
+  </div>
+</nav>
+
+<!-- ════════ PAGE 1 – ACTIVE CENTERS ════════ -->
+<div id="page-active-centers" class="page active">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="ac-cluster" onchange="acCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="ac-sub" onchange="acCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Type of Center</label>
+      <select id="ac-toc" onchange="acCascade()"><option value="">All Types</option></select></div>
+    <div class="fg"><label>Status</label>
+      <select id="ac-status" onchange="acCascade()"><option value="">All Status</option></select></div>
+    <div class="fg"><label>Distance Slab</label>
+      <select id="ac-dist-slab" onchange="acCascade()"><option value="">All Slabs</option></select></div>
+    <div class="fg"><label>Entity</label>
+      <select id="ac-entity" onchange="acCascade()"><option value="">All Entities</option></select></div>
+    <div class="fg"><label>Centre Name Near</label>
+      <select id="ac-center-near"><option value="">All Centers</option></select></div>
+    <button class="btn btn-apply" onclick="loadACData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetAC()">Reset</button>
+  </div>
+  <div class="cards-row" id="ac-cards">
+    <div class="loading"><div class="spinner"></div> Loading…</div>
+  </div>
+  <div class="grid-map">
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">🗺️ Center Locations Map</div>
+        <span class="panel-count" id="ac-map-count">—</span>
+      </div>
+      <div class="map-legend" id="ac-legend"></div>
+      <div id="map"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">📊 Type of Center</div></div>
+      <div class="chart-wrap"><canvas id="ac-toc-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr">
+      <div class="panel-title">📋 Center Details</div>
+      <span class="panel-count" id="ac-tbl-count">—</span>
+    </div>
+    <div class="tbl-search"><input placeholder="Search table…" oninput="filterTbl('ac-tbody',this.value)"/></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Centre Name</th><th>Centre Name Near</th><th>Type of Center</th>
+        <th>Cluster</th><th>Sub Cluster</th><th>Status</th>
+        <th>State</th><th>District</th><th>Distance (km)</th><th>Distance Slab</th>
+      </tr></thead>
+      <tbody id="ac-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════════ PAGE 2 – QP & CRITERIA ════════ -->
+<div id="page-qp-criteria" class="page">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="qp-cluster" onchange="qpCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="qp-sub" onchange="qpCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Sector</label>
+      <select id="qp-sector" onchange="qpCascade()"><option value="">All Sectors</option></select></div>
+    <div class="fg"><label>Business Vertical</label>
+      <select id="qp-bv" onchange="qpCascade()"><option value="">All Verticals</option></select></div>
+    <div class="fg"><label>Entity</label>
+      <select id="qp-entity" onchange="qpCascade()"><option value="">All Entities</option></select></div>
+    <div class="fg"><label>Center Name</label>
+      <select id="qp-center"><option value="">All Centers</option></select></div>
+    <button class="btn btn-apply" onclick="loadQPData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetQP()">Reset</button>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="panel-hdr"><div class="panel-title">📊 Jobs by Sector</div></div>
+      <div class="chart-wrap"><canvas id="qp-sector-chart"></canvas></div></div>
+    <div class="panel"><div class="panel-hdr"><div class="panel-title">📊 Business Verticals</div></div>
+      <div class="chart-wrap"><canvas id="qp-bv-chart"></canvas></div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr">
+      <div class="panel-title">📋 QP / Job Role Criteria</div>
+      <span class="panel-count" id="qp-tbl-count">—</span>
+    </div>
+    <div class="tbl-search"><input placeholder="Search table…" oninput="filterTbl('qp-tbody',this.value)"/></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Zone</th><th>Entity</th><th>Cluster</th><th>Sub Cluster</th><th>Centre Name</th>
+        <th>QP / Job Role</th><th>Sector</th><th>Business Vertical</th><th>Age</th><th>Criteria</th>
+      </tr></thead>
+      <tbody id="qp-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════════ PAGE 3 – IMPACT ════════ -->
+<div id="page-impact" class="page">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="imp-cluster" onchange="impCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="imp-sub" onchange="impCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Centre Type</label>
+      <select id="imp-ctype" onchange="impCascade()"><option value="">All Types</option></select></div>
+    <div class="fg"><label>Center Name</label>
+      <select id="imp-center"><option value="">All Centers</option></select></div>
+    <button class="btn btn-apply" onclick="loadImpData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetImp()">Reset</button>
+  </div>
+  <div class="cards-row">
+    <div class="card">       <div class="card-label">Enrolled</div>  <div class="card-value" id="imp-enrolled">—</div></div>
+    <div class="card c-blue"><div class="card-label">Certified</div> <div class="card-value" id="imp-certified">—</div></div>
+    <div class="card c-green"><div class="card-label">Placed</div>   <div class="card-value" id="imp-placed">—</div></div>
+    <div class="card c-red"> <div class="card-label">Dropout</div>   <div class="card-value" id="imp-dropout">—</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr">
+      <div class="panel-title">📋 Center-wise Impact</div>
+      <span class="panel-count" id="imp-tbl-count">—</span>
+    </div>
+    <div class="tbl-search"><input placeholder="Search table…" oninput="filterTbl('imp-tbody',this.value)"/></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Centre ID</th><th>Centre Name</th><th>Cluster</th><th>Sub Cluster</th>
+        <th>State</th><th>Type</th><th>Status</th>
+        <th>Enrolled</th><th>Certified</th><th>Placed</th><th>Dropout</th>
+      </tr></thead>
+      <tbody id="imp-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════════ PAGE 4 – MANPOWER ════════ -->
+<div id="page-manpower" class="page">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="mp-cluster" onchange="mpCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="mp-sub" onchange="mpCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Project</label>
+      <select id="mp-project" onchange="mpCascade()"><option value="">All Projects</option></select></div>
+    <div class="fg"><label>Centre Name</label>
+      <select id="mp-center"><option value="">All Centers</option></select></div>
+    <button class="btn btn-apply" onclick="loadMPData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetMP()">Reset</button>
+  </div>
+  <div class="cards-row" id="mp-cards">
+    <div class="loading"><div class="spinner"></div> Loading…</div>
+  </div>
+  <div class="grid-map">
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">🗺️ Manpower Center Locations</div>
+        <span class="panel-count" id="mp-map-count">—</span>
+      </div>
+      <div id="mp-map"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">📊 Staff by Role</div></div>
+      <div class="chart-wrap"><canvas id="mp-role-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr">
+      <div class="panel-title">📋 Manpower Details</div>
+      <span class="panel-count" id="mp-tbl-count">—</span>
+    </div>
+    <div class="tbl-search"><input placeholder="Search table…" oninput="filterTbl('mp-tbody',this.value)"/></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Employee Name</th><th>Role</th><th>Project</th><th>Centre Name</th>
+        <th>Cluster</th><th>Sub Cluster</th><th>State</th><th>District</th><th>Status</th>
+      </tr></thead>
+      <tbody id="mp-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════════ PAGE 5 – EMPLOYER MASTER ════════ -->
+<div id="page-employer" class="page">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="emp-cluster" onchange="empCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="emp-sub" onchange="empCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Center Name</label>
+      <select id="emp-center" onchange="empCascade()"><option value="">All Centers</option></select></div>
+    <div class="fg"><label>QP Name</label>
+      <select id="emp-qp"><option value="">All QPs</option></select></div>
+    <button class="btn btn-apply" onclick="loadEmpData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetEmp()">Reset</button>
+  </div>
+  <div class="cards-row">
+    <div class="card c-green"> <div class="card-label">Total Placed</div>    <div class="card-value" id="emp-total-placed">—</div>    <div class="card-sub">Across all employers</div></div>
+    <div class="card c-blue">  <div class="card-label">Employers</div>        <div class="card-value" id="emp-total-employers">—</div> <div class="card-sub">Unique employer count</div></div>
+    <div class="card c-purple"><div class="card-label">QP Names</div>         <div class="card-value" id="emp-total-qps">—</div>       <div class="card-sub">Job roles covered</div></div>
+    <div class="card">         <div class="card-label">Records</div>           <div class="card-value" id="emp-total-records">—</div>   <div class="card-sub">Total filtered rows</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">🏆 Top Employers by Placed Count</div></div>
+      <div class="emp-bar-wrap" id="emp-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-title">📊 Placed Count by Employer (Top 15)</div></div>
+      <div class="chart-wrap"><canvas id="emp-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-hdr">
+      <div class="panel-title">📋 Employer Master Details</div>
+      <span class="panel-count" id="emp-tbl-count">—</span>
+    </div>
+    <div class="tbl-search"><input placeholder="Search table…" oninput="filterTbl('emp-tbody',this.value)"/></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>FY</th><th>Centre Name</th><th>Cluster</th><th>Sub Cluster</th>
+        <th>QP Name</th><th>Employer Name</th><th>Placed Count</th>
+      </tr></thead>
+      <tbody id="emp-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ════════ PAGE 6 – MIGRANT DATA ════════ -->
+<div id="page-migrant" class="page">
+  <div class="filter-bar">
+    <div class="fg"><label>Cluster</label>
+      <select id="mig-cluster" onchange="migCascade()"><option value="">All Clusters</option></select></div>
+    <div class="fg"><label>Sub Cluster</label>
+      <select id="mig-sub" onchange="migCascade()"><option value="">All Sub Clusters</option></select></div>
+    <div class="fg"><label>Center Name</label>
+      <select id="mig-center" onchange="migCascade()"><option value="">All Centers</option></select></div>
+    <div class="fg"><label>Sector</label>
+      <select id="mig-sector" onchange="migCascade()"><option value="">All Sectors</option></select></div>
+    <div class="fg"><label>Project FY</label>
+      <select id="mig-fy"><option value="">All FYs</option></select></div>
+    <div class="fg"><label>QP Name</label>
+      <select id="mig-qp"><option value="">All QPs</option></select></div>
+    <button class="btn btn-apply" onclick="loadMigData()">Apply</button>
+    <button class="btn btn-reset" onclick="resetMig()">Reset</button>
+  </div>
+  <div class="cards-row">
+    <div class="card">         <div class="card-label">Total Enrolled</div>     <div class="card-value" id="mig-enrolled">—</div></div>
+    <div class="card c-blue">  <div class="card-label">Inter State Migrant</div><div class="card-value" id="mig-interstate">—</div></div>
+    <div class="card c-teal">  <div class="card-label">Inter District</div>     <div class="card-value" id="mig-interdistrict">—</div></div>
+    <div class="card c-green"> <div class="card-label">Local</div>              <div class="card-value" id="mig-local">—</div></div>
+    <div class="card c-purple"><div class="card-label">Community Count</div>   <div class="card-value" id="mig-community">—</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">📋 Center-wise Migrant Summary</div>
+        <span class="panel-count" id="mig-center-count">—</span>
+      </div>
+      <div class="tbl-search"><input placeholder="Search…" oninput="filterTbl('mig-center-tbody',this.value)"/></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Centre Name</th><th>Cluster</th><th>Sub Cluster</th>
+          <th>Enrolled</th><th>Interstate</th><th>Inter District</th><th>Local</th><th>Community</th>
+        </tr></thead>
+        <tbody id="mig-center-tbody"></tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title">📋 Area-wise Migrant Summary</div>
+        <span class="panel-count" id="mig-area-count">—</span>
+      </div>
+      <div class="tbl-search"><input placeholder="Search…" oninput="filterTbl('mig-area-tbody',this.value)"/></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>Area</th><th>Cluster</th><th>Sub Cluster</th>
+          <th>Enrolled</th><th>Interstate</th><th>Inter District</th><th>Local</th><th>Community</th>
+        </tr></thead>
+        <tbody id="mig-area-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══ CONFIG ═══════════════════════════════════════════════════
+const TOC_COLORS = {
+  "Center":              "#10b981",
+  "Community":           "#3b82f6",
+  "Hospital / UPHC/PHC": "#ef4444",
+  "School and College":  "#f97316",
+};
+const TOC_DEFAULT = "#a855f7";
+
+// ═══ STATE ════════════════════════════════════════════════════
+let leafMap = null, mapMarkers = [];
+let mpMap = null, mpMarkers = [];
+let chartTOC = null, chartQPSec = null, chartQPBV = null;
+let chartMPRole = null, chartEmp = null;
+let mpLoaded = false, empLoaded = false, migLoaded = false;
+
+// ═══ PAGE SWITCH ══════════════════════════════════════════════
+function switchPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id==='active-centers') acInit();
+  if (id==='qp-criteria')    qpInit();
+  if (id==='impact')          impInit();
+  if (id==='manpower'  && !mpLoaded)  { mpLoaded=true;  mpInit(); }
+  if (id==='employer'  && !empLoaded) { empLoaded=true;  empInit(); }
+  if (id==='migrant'   && !migLoaded) { migLoaded=true;  migInit(); }
+}
+
+// ═══ HELPERS ══════════════════════════════════════════════════
+function setSelect(id, options, keepVal=false) {
+  const el = document.getElementById(id);
+  const prev = keepVal ? el.value : '';
+  const first = el.options[0];
+  el.innerHTML = '';
+  el.appendChild(first);
+  options.forEach(o => {
+    if (!o) return;
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = o;
+    el.appendChild(opt);
+  });
+  if (prev && [...el.options].some(o=>o.value===prev)) el.value = prev;
+}
+
+function filterTbl(tbodyId, q) {
+  q = q.toLowerCase();
+  document.getElementById(tbodyId).querySelectorAll('tr').forEach(r=>{
+    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function barChart(canvasId, counts, color, ref, setRef) {
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  if (ref) ref.destroy();
+  const c = new Chart(ctx, {
+    type:'bar',
+    data:{labels:entries.map(([k])=>k), datasets:[{data:entries.map(([,v])=>v),backgroundColor:color,borderRadius:4}]},
+    options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,.5)'}},
+              y:{ticks:{color:'#8b949e',font:{size:11}},grid:{color:'rgba(48,54,61,.3)'}}}}
+  });
+  setRef(c);
+}
+
+function tocColor(toc) { return TOC_COLORS[toc] || TOC_DEFAULT; }
+
+// ═══ ACTIVE CENTERS ═══════════════════════════════════════════
+function acGetParams() {
+  return new URLSearchParams({
+    entity:     document.getElementById('ac-entity').value,
+    cluster:    document.getElementById('ac-cluster').value,
+    sub_cluster:document.getElementById('ac-sub').value,
+    toc:        document.getElementById('ac-toc').value,
+    status:     document.getElementById('ac-status').value,
+    dist_slab:  document.getElementById('ac-dist-slab').value,
+    center_near:document.getElementById('ac-center-near').value,
+  });
+}
+
+async function acInit() {
+  const r = await fetch('/api/filters/active-centers');
+  const f = await r.json();
+  setSelect('ac-cluster',    f.clusters);
+  setSelect('ac-sub',        f.sub_clusters);
+  setSelect('ac-toc',        f.tocs);
+  setSelect('ac-status',     f.statuses);
+  setSelect('ac-dist-slab',  f.dist_slabs);
+  setSelect('ac-entity',     f.entities);
+  setSelect('ac-center-near',f.centers_near);
+  buildLegend();
+  loadACData();
+}
+async function acCascade() {
+  const r = await fetch('/api/filters/active-centers?' + acGetParams());
+  const f = await r.json();
+  setSelect('ac-sub',        f.sub_clusters, true);
+  setSelect('ac-toc',        f.tocs,         true);
+  setSelect('ac-status',     f.statuses,     true);
+  setSelect('ac-dist-slab',  f.dist_slabs,   true);
+  setSelect('ac-entity',     f.entities,     true);
+  setSelect('ac-center-near',f.centers_near, true);
+}
+function buildLegend() {
+  const leg = document.getElementById('ac-legend');
+  leg.innerHTML = Object.entries(TOC_COLORS).map(([label, color])=>
+    `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${label}</div>`
+  ).join('');
+}
+
+async function loadACData() {
+  document.getElementById('ac-cards').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const r = await fetch('/api/data/active-centers?' + acGetParams());
+  const d = await r.json();
+  const tc = d.summary.toc_counts;
+
+  document.getElementById('ac-cards').innerHTML = `
+    <div class="card c-green"><div class="card-label">Center</div>
+      <div class="card-value">${(tc['Center']||0).toLocaleString()}</div><div class="card-sub">Training centers</div></div>
+    <div class="card c-blue"><div class="card-label">Community</div>
+      <div class="card-value">${(tc['Community']||0).toLocaleString()}</div><div class="card-sub">Community locations</div></div>
+    <div class="card c-red"><div class="card-label">Hospital / UPHC/PHC</div>
+      <div class="card-value">${(tc['Hospital / UPHC/PHC']||0).toLocaleString()}</div><div class="card-sub">Health facilities</div></div>
+    <div class="card"><div class="card-label">School and College</div>
+      <div class="card-value">${(tc['School and College']||0).toLocaleString()}</div><div class="card-sub">Educational institutes</div></div>`;
+
+  renderMap(d.map_points);
+  document.getElementById('ac-map-count').textContent = d.map_points.length + ' points';
+
+  const labels = Object.keys(tc);
+  const ctx = document.getElementById('ac-toc-chart').getContext('2d');
+  if (chartTOC) chartTOC.destroy();
+  chartTOC = new Chart(ctx, {
+    type:'doughnut',
+    data:{labels, datasets:[{data:Object.values(tc), backgroundColor:labels.map(l=>tocColor(l)), borderWidth:0}]},
+    options:{responsive:true, plugins:{legend:{labels:{color:'#e6edf3',font:{family:'DM Sans'}}}}}
+  });
+
+  document.getElementById('ac-tbody').innerHTML = d.table.map(r=>`<tr>
+    <td title="${r['Centre Name']}">${r['Centre Name']||'—'}</td>
+    <td title="${r['Centre Name  Near']}">${r['Centre Name  Near']||'—'}</td>
+    <td><span class="badge" style="background:${tocColor(r['Type of Center'])}22;color:${tocColor(r['Type of Center'])}">${r['Type of Center']||'—'}</span></td>
+    <td>${r['Cluster Name']||'—'}</td><td>${r['Sub Cluster Name']||'—'}</td>
+    <td><span class="badge ${r['Status']==='Active'?'b-active':'b-inactive'}">${r['Status']||'—'}</span></td>
+    <td>${r['State']||'—'}</td><td>${r['District']||'—'}</td>
+    <td>${r['Distance (km)']||'0'}</td><td>${r['Distance Slab']||'—'}</td>
+  </tr>`).join('');
+  document.getElementById('ac-tbl-count').textContent = d.table.length + ' records';
+}
+
+function resetAC() {
+  ['ac-entity','ac-cluster','ac-sub','ac-toc','ac-status','ac-dist-slab','ac-center-near']
+    .forEach(id => document.getElementById(id).selectedIndex = 0);
+  acInit();
+}
+
+async function loadACData() {
+  document.getElementById('ac-cards').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const r = await fetch('/api/data/active-centers?' + acGetParams());
+  const d = await r.json();
+  const tc = d.summary.toc_counts;
+
+  document.getElementById('ac-cards').innerHTML = `
+    <div class="card c-green"><div class="card-label">Center</div>
+      <div class="card-value">${(tc['Center']||0).toLocaleString()}</div><div class="card-sub">Training centers</div></div>
+    <div class="card c-blue"><div class="card-label">Community</div>
+      <div class="card-value">${(tc['Community']||0).toLocaleString()}</div><div class="card-sub">Community locations</div></div>
+    <div class="card c-red"><div class="card-label">Hospital / UPHC/PHC</div>
+      <div class="card-value">${(tc['Hospital / UPHC/PHC']||0).toLocaleString()}</div><div class="card-sub">Health facilities</div></div>
+    <div class="card"><div class="card-label">School and College</div>
+      <div class="card-value">${(tc['School and College']||0).toLocaleString()}</div><div class="card-sub">Educational institutes</div></div>`;
+
+  renderMap(d.map_points);
+  document.getElementById('ac-map-count').textContent = d.map_points.length + ' points';
+
+  const labels = Object.keys(tc);
+  const ctx = document.getElementById('ac-toc-chart').getContext('2d');
+  if (chartTOC) chartTOC.destroy();
+  chartTOC = new Chart(ctx, {
+    type:'doughnut',
+    data:{labels, datasets:[{data:Object.values(tc), backgroundColor:labels.map(l=>tocColor(l)), borderWidth:0}]},
+    options:{responsive:true, plugins:{legend:{labels:{color:'#e6edf3',font:{family:'DM Sans'}}}}}
+  });
+
+  document.getElementById('ac-tbody').innerHTML = d.table.map(r=>`<tr>
+    <td title="${r['Centre Name']}">${r['Centre Name']||'—'}</td>
+    <td title="${r['Centre Name  Near']}">${r['Centre Name  Near']||'—'}</td>
+    <td><span class="badge" style="background:${tocColor(r['Type of Center'])}22;color:${tocColor(r['Type of Center'])}">${r['Type of Center']||'—'}</span></td>
+    <td>${r['Cluster Name']||'—'}</td><td>${r['Sub Cluster Name']||'—'}</td>
+    <td><span class="badge ${r['Status']==='Active'?'b-active':'b-inactive'}">${r['Status']||'—'}</span></td>
+    <td>${r['State']||'—'}</td><td>${r['District']||'—'}</td>
+    <td>${r['Distance (km)']||'0'}</td><td>${r['Distance Slab']||'—'}</td>
+  </tr>`).join('');
+  document.getElementById('ac-tbl-count').textContent = d.table.length + ' records';
+}
+
+function resetAC() {
+  ['ac-cluster','ac-sub','ac-toc','ac-status','ac-dist-slab','ac-entity','ac-center-near']
+    .forEach(id => document.getElementById(id).selectedIndex = 0);
+  acInit();
+}
+
+// ═══ MAP – Active Centers ═════════════════════════════════════
+function renderMap(points) {
+  if (!leafMap) {
+    leafMap = L.map('map').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(leafMap);
+  }
+  mapMarkers.forEach(m => leafMap.removeLayer(m));
+  mapMarkers = [];
+  points.forEach(p => {
+    if (!p.lat || !p.lng) return;
+    const col = p.color || TOC_DEFAULT;
+    const icon = L.divIcon({
+      html:`<div style="width:13px;height:13px;border-radius:50%;background:${col};border:2.5px solid white;box-shadow:0 0 5px rgba(0,0,0,.5)"></div>`,
+      className:'', iconSize:[13,13], iconAnchor:[6,6]
+    });
+    let mpHtml = '';
+    if (p.manpower && p.manpower.length > 0) {
+      mpHtml = `<div style="margin-top:8px;font-size:11px;font-weight:600;color:#8b949e;margin-bottom:4px">👥 MANPOWER (${p.manpower.length})</div>
+        <div class="popup-mp-list">${p.manpower.map(m=>
+          `<div class="popup-mp-row"><span>${m.name||'—'}</span><span class="popup-mp-role">${m.role||'—'}</span></div>`
+        ).join('')}</div>`;
+    }
+    const m = L.marker([p.lat, p.lng], {icon}).bindPopup(`
+      <div class="popup-title">${p.near || p.name}</div>
+      ${p.near && p.near!==p.name ? `<div class="popup-near">Near: ${p.name}</div>` : ''}
+      <span class="popup-toc" style="background:${col}22;color:${col}">${p.toc}</span>
+      <div class="popup-row">Cluster: <span>${p.cluster}</span></div>
+      <div class="popup-row">Sub Cluster: <span>${p.sub_cluster}</span></div>
+      <div class="popup-row">Status: <span>${p.status}</span></div>
+      <div class="popup-row">Distance: <span>${p.distance} km (${p.dist_slab})</span></div>
+      ${mpHtml}
+      ${p.map_url?`<a class="popup-link" href="${p.map_url}" target="_blank">📍 Open in Maps</a>`:''}
+    `,{maxWidth:300});
+    m.addTo(leafMap);
+    mapMarkers.push(m);
+  });
+  const valid = points.filter(p=>p.lat&&p.lng);
+  if (valid.length>0) leafMap.fitBounds(L.latLngBounds(valid.map(p=>[p.lat,p.lng])),{padding:[30,30]});
+}
+
+
+// ═══ QP & CRITERIA ════════════════════════════════════════════
+function qpGetParams() {
+  return new URLSearchParams({
+    cluster:    document.getElementById('qp-cluster').value,
+    sub_cluster:document.getElementById('qp-sub').value,
+    sector:     document.getElementById('qp-sector').value,
+    bv:         document.getElementById('qp-bv').value,
+    entity:     document.getElementById('qp-entity').value,
+    center_name:document.getElementById('qp-center').value,
+  });
+}
+async function qpInit() {
+  const r = await fetch('/api/filters/qp-criteria');
+  const f = await r.json();
+  setSelect('qp-cluster', f.clusters);
+  setSelect('qp-sub',     f.sub_clusters);
+  setSelect('qp-sector',  f.sectors);
+  setSelect('qp-bv',      f.business_verticals);
+  setSelect('qp-entity',  f.entities);
+  setSelect('qp-center',  f.centers);
+  loadQPData();
+}
+async function qpCascade() {
+  const r = await fetch('/api/filters/qp-criteria?' + qpGetParams());
+  const f = await r.json();
+  setSelect('qp-sub',    f.sub_clusters,       true);
+  setSelect('qp-sector', f.sectors,            true);
+  setSelect('qp-bv',     f.business_verticals, true);
+  setSelect('qp-entity', f.entities,           true);
+  setSelect('qp-center', f.centers,            true);
+}
+async function loadQPData() {
+  const r = await fetch('/api/data/qp-criteria?' + qpGetParams());
+  const d = await r.json();
+  const secCounts={}, bvCounts={};
+  d.data.forEach(r=>{
+    const s=r['Sector_name']||'Other'; secCounts[s]=(secCounts[s]||0)+1;
+    const b=r['Business Vertical ']||'Other'; bvCounts[b]=(bvCounts[b]||0)+1;
+  });
+  barChart('qp-sector-chart', secCounts, '#3b82f6', chartQPSec, v=>chartQPSec=v);
+  barChart('qp-bv-chart',     bvCounts,  '#10b981', chartQPBV,  v=>chartQPBV=v);
+  document.getElementById('qp-tbody').innerHTML = d.data.map(r=>`<tr>
+    <td>${r['Zone']||'—'}</td><td>${r['Entity ']||'—'}</td>
+    <td>${r['Cluster Name']||'—'}</td><td>${r['Sub Cluster Name']||'—'}</td>
+    <td title="${r['Centre Name']}">${r['Centre Name']||'—'}</td>
+    <td title="${r['QP Name']}">${r['QP Name']||'—'}</td>
+    <td>${r['Sector_name']||'—'}</td><td>${r['Business Vertical ']||'—'}</td>
+    <td>${r['Age']||'—'}</td><td title="${r['New Criteria']}">${r['New Criteria']||'—'}</td>
+  </tr>`).join('');
+  document.getElementById('qp-tbl-count').textContent = d.total + ' records';
+}
+function resetQP() {
+  ['qp-cluster','qp-sub','qp-sector','qp-bv','qp-entity','qp-center']
+    .forEach(id=>document.getElementById(id).selectedIndex=0);
+  qpInit();
+}
+
+// ═══ IMPACT ═══════════════════════════════════════════════════
+function impGetParams() {
+  return new URLSearchParams({
+    cluster:     document.getElementById('imp-cluster').value,
+    sub_cluster: document.getElementById('imp-sub').value,
+    centre_type: document.getElementById('imp-ctype').value,
+    center_name: document.getElementById('imp-center').value,
+  });
+}
+async function impInit() {
+  const r = await fetch('/api/filters/impact');
+  const f = await r.json();
+  setSelect('imp-cluster', f.clusters);
+  setSelect('imp-sub',     f.sub_clusters);
+  setSelect('imp-ctype',   f.centre_types);
+  setSelect('imp-center',  f.centers);
+  loadImpData();
+}
+async function impCascade() {
+  const r = await fetch('/api/filters/impact?' + impGetParams());
+  const f = await r.json();
+  setSelect('imp-sub',    f.sub_clusters, true);
+  setSelect('imp-ctype',  f.centre_types, true);
+  setSelect('imp-center', f.centers,      true);
+}
+async function loadImpData() {
+  const r = await fetch('/api/data/impact?' + impGetParams());
+  const d = await r.json();
+  document.getElementById('imp-enrolled').textContent  = d.summary.enrolled.toLocaleString();
+  document.getElementById('imp-certified').textContent = d.summary.certified.toLocaleString();
+  document.getElementById('imp-placed').textContent    = d.summary.placed.toLocaleString();
+  document.getElementById('imp-dropout').textContent   = d.summary.dropout.toLocaleString();
+  function impCol(row, ...keys) {
+    for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return row[k]; }
+    const lower = Object.fromEntries(Object.entries(row).map(([k,v])=>[k.trim().toLowerCase(),v]));
+    for (const k of keys) { const v = lower[k.trim().toLowerCase()]; if (v !== undefined && v !== '') return v; }
+    return 0;
+  }
+  document.getElementById('imp-tbody').innerHTML=d.data.map(r=>`<tr>
+    <td>${r['Centre ID']||'—'}</td>
+    <td title="${r['Centre Name']}">${r['Centre Name']||'—'}</td>
+    <td>${r['Cluster Name']||'—'}</td><td>${r['Sub Cluster Name']||'—'}</td>
+    <td>${r['Branch State']||'—'}</td><td>${r['Type']||'—'}</td>
+    <td><span class="badge ${r['Active Status Cluster']==='Active'?'b-active':'b-inactive'}">${r['Active Status Cluster']||'—'}</span></td>
+    <td>${Number(impCol(r,'Enrolled',' Enrolled')||0).toLocaleString()}</td>
+    <td>${Number(impCol(r,'Certified',' Certified')||0).toLocaleString()}</td>
+    <td>${Number(impCol(r,'Placed',' Placed')||0).toLocaleString()}</td>
+    <td>${Number(impCol(r,'DropOut/Notcertified',' DropOut/Notcertified','Dropout',' Dropout')||0).toLocaleString()}</td>
+  </tr>`).join('');
+  document.getElementById('imp-tbl-count').textContent=d.data.length+' records';
+}
+function resetImp() {
+  ['imp-cluster','imp-sub','imp-ctype','imp-center'].forEach(id=>document.getElementById(id).selectedIndex=0);
+  impInit();
+}
+
+// ═══ MANPOWER ═════════════════════════════════════════════════
+function mpGetParams() {
+  return new URLSearchParams({
+    cluster:    document.getElementById('mp-cluster').value,
+    sub_cluster:document.getElementById('mp-sub').value,
+    project:    document.getElementById('mp-project').value,
+    center:     document.getElementById('mp-center').value,
+  });
+}
+async function mpInit() {
+  document.getElementById('mp-cards').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const r = await fetch('/api/filters/manpower');
+  const f = await r.json();
+  setSelect('mp-cluster', f.clusters);
+  setSelect('mp-sub',     f.sub_clusters);
+  setSelect('mp-project', f.projects);
+  setSelect('mp-center',  f.centers);
+  await loadMPData();
+}
+async function mpCascade() {
+  const r = await fetch('/api/filters/manpower?' + mpGetParams());
+  const f = await r.json();
+  setSelect('mp-sub',     f.sub_clusters, true);
+  setSelect('mp-project', f.projects,     true);
+  setSelect('mp-center',  f.centers,      true);
+}
+async function loadMPData() {
+  document.getElementById('mp-cards').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const r = await fetch('/api/data/manpower?' + mpGetParams());
+  const d = await r.json();
+
+  const totalStaff    = d.total;
+  const uniqueCenters = new Set(d.data.map(x=>x.center_id).filter(Boolean)).size;
+  const roleEntries   = Object.entries(d.role_counts).sort((a,b)=>b[1]-a[1]);
+
+  let cardHtml = `
+    <div class="card c-teal"><div class="card-label">Total Staff</div>
+      <div class="card-value">${totalStaff.toLocaleString()}</div><div class="card-sub">Manpower deployed</div></div>
+    <div class="card c-green"><div class="card-label">Centers Covered</div>
+      <div class="card-value">${uniqueCenters.toLocaleString()}</div><div class="card-sub">With manpower assigned</div></div>`;
+  roleEntries.slice(0,2).forEach(([role,cnt])=>{
+    cardHtml+=`<div class="card c-purple"><div class="card-label">${role}</div>
+      <div class="card-value">${cnt.toLocaleString()}</div><div class="card-sub">Staff count</div></div>`;
+  });
+  document.getElementById('mp-cards').innerHTML = cardHtml;
+
+  // Map – group by center
+  const centerMap = {};
+  d.data.forEach(p => {
+    if (!p.center_id || !p.lat || !p.lng) return;
+    if (!centerMap[p.center_id]) {
+      centerMap[p.center_id] = {lat:p.lat, lng:p.lng, centre_name:p.centre_name,
+        cluster:p.cluster, sub_cluster:p.sub_cluster, state:p.state, status:p.status, staff:[]};
+    }
+    centerMap[p.center_id].staff.push({name:p.employee_name, role:p.role});
+  });
+
+  if (!mpMap) {
+    mpMap = L.map('mp-map').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(mpMap);
+  }
+  mpMarkers.forEach(m=>mpMap.removeLayer(m)); mpMarkers=[];
+
+  const mpPoints = Object.values(centerMap);
+  mpPoints.forEach(p => {
+    const cnt = p.staff.length;
+    const icon = L.divIcon({
+      html:`<div style="min-width:22px;height:22px;border-radius:11px;background:#06b6d4;border:2.5px solid white;box-shadow:0 0 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;padding:0 4px">${cnt}</div>`,
+      className:'', iconSize:[22,22], iconAnchor:[11,11]
+    });
+    const staffRows = p.staff.map(s=>`<div class="popup-mp-row"><span>${s.name||'—'}</span><span class="popup-mp-role">${s.role||'—'}</span></div>`).join('');
+    const m = L.marker([p.lat,p.lng],{icon}).bindPopup(`
+      <div class="popup-title">${p.centre_name||'—'}</div>
+      <div class="popup-row">Cluster: <span>${p.cluster}</span></div>
+      <div class="popup-row">Sub Cluster: <span>${p.sub_cluster}</span></div>
+      <div class="popup-row">State: <span>${p.state}</span></div>
+      <div style="margin-top:8px;font-size:11px;font-weight:600;color:#8b949e;margin-bottom:4px">👥 STAFF (${cnt})</div>
+      <div class="popup-mp-list">${staffRows}</div>`,{maxWidth:300});
+    m.addTo(mpMap); mpMarkers.push(m);
+  });
+  if (mpPoints.length>0) mpMap.fitBounds(L.latLngBounds(mpPoints.map(p=>[p.lat,p.lng])),{padding:[30,30]});
+  document.getElementById('mp-map-count').textContent = mpPoints.length+' centers';
+
+  barChart('mp-role-chart', d.role_counts, '#06b6d4', chartMPRole, v=>chartMPRole=v);
+
+  document.getElementById('mp-tbody').innerHTML = d.data.map(r=>`<tr>
+    <td>${r.employee_name||'—'}</td>
+    <td><span class="badge" style="background:rgba(6,182,212,.15);color:#06b6d4">${r.role||'—'}</span></td>
+    <td title="${r.project}">${r.project||'—'}</td>
+    <td title="${r.centre_name}">${r.centre_name||'—'}</td>
+    <td>${r.cluster||'—'}</td><td>${r.sub_cluster||'—'}</td>
+    <td>${r.state||'—'}</td><td>${r.district||'—'}</td>
+    <td><span class="badge ${r.status==='Active'?'b-active':'b-inactive'}">${r.status||'—'}</span></td>
+  </tr>`).join('');
+  document.getElementById('mp-tbl-count').textContent = d.total+' records';
+}
+
+function resetMP() {
+  ['mp-cluster','mp-sub','mp-project','mp-center'].forEach(id=>document.getElementById(id).selectedIndex=0);
+  mpInit();
+}
+
+// ═══ EMPLOYER MASTER ══════════════════════════════════════════
+function empGetParams() {
+  return new URLSearchParams({
+    cluster:    document.getElementById('emp-cluster').value,
+    sub_cluster:document.getElementById('emp-sub').value,
+    center:     document.getElementById('emp-center').value,
+    qp:         document.getElementById('emp-qp').value,
+  });
+}
+async function empInit() {
+  const r = await fetch('/api/filters/employer');
+  const f = await r.json();
+  setSelect('emp-cluster', f.clusters);
+  setSelect('emp-sub',     f.sub_clusters);
+  setSelect('emp-center',  f.centers);
+  setSelect('emp-qp',      f.qps);
+  await loadEmpData();
+}
+async function empCascade() {
+  const r = await fetch('/api/filters/employer?' + empGetParams());
+  const f = await r.json();
+  setSelect('emp-sub',    f.sub_clusters, true);
+  setSelect('emp-center', f.centers,      true);
+  setSelect('emp-qp',     f.qps,          true);
+}
+async function loadEmpData() {
+  const r = await fetch('/api/data/employer?' + empGetParams());
+  const d = await r.json();
+  document.getElementById('emp-total-placed').textContent    = d.summary.total_placed.toLocaleString();
+  document.getElementById('emp-total-employers').textContent = d.summary.total_employers.toLocaleString();
+  document.getElementById('emp-total-qps').textContent       = d.summary.total_qps.toLocaleString();
+  document.getElementById('emp-total-records').textContent   = d.summary.total_records.toLocaleString();
+
+  const top20 = d.employer_totals.slice(0,20);
+  const maxP  = top20[0]?.[1] || 1;
+  document.getElementById('emp-bars').innerHTML = top20.map(([name,cnt])=>`
+    <div class="stat-row">
+      <div class="stat-name" title="${name}">${name}</div>
+      <div class="stat-track"><div class="stat-fill" style="width:${(cnt/maxP*100).toFixed(1)}%;background:#a855f7"></div></div>
+      <div class="stat-num">${cnt.toLocaleString()}</div>
+    </div>`).join('');
+
+  barChart('emp-chart', Object.fromEntries(d.employer_totals.slice(0,15)), '#a855f7', chartEmp, v=>chartEmp=v);
+
+  document.getElementById('emp-tbody').innerHTML = d.data.map(r=>`<tr>
+    <td>${r['Project Executed FY']||'—'}</td>
+    <td title="${r['Centre Name']}">${r['Centre Name']||'—'}</td>
+    <td>${r['Cluster Name']||'—'}</td><td>${r['Sub Cluster Name']||'—'}</td>
+    <td title="${r['QP Name']}">${r['QP Name']||'—'}</td>
+    <td title="${r['Employer Name']}">${r['Employer Name']||'—'}</td>
+    <td style="font-weight:600;color:var(--purple)">${Number(r['Placed Count']||0).toLocaleString()}</td>
+  </tr>`).join('');
+  document.getElementById('emp-tbl-count').textContent = d.data.length+' records';
+}
+function resetEmp() {
+  ['emp-cluster','emp-sub','emp-center','emp-qp'].forEach(id=>document.getElementById(id).selectedIndex=0);
+  empInit();
+}
+
+// ═══ MIGRANT DATA ═════════════════════════════════════════════
+function migGetParams() {
+  return new URLSearchParams({
+    cluster:    document.getElementById('mig-cluster').value,
+    sub_cluster:document.getElementById('mig-sub').value,
+    center:     document.getElementById('mig-center').value,
+    sector:     document.getElementById('mig-sector').value,
+    fy:         document.getElementById('mig-fy').value,
+    qp:         document.getElementById('mig-qp').value,
+  });
+}
+async function migInit() {
+  const r = await fetch('/api/filters/migrant');
+  const f = await r.json();
+  setSelect('mig-cluster', f.clusters);
+  setSelect('mig-sub',     f.sub_clusters);
+  setSelect('mig-center',  f.centers);
+  setSelect('mig-sector',  f.sectors);
+  setSelect('mig-fy',      f.fys);
+  setSelect('mig-qp',      f.qps);
+  await loadMigData();
+}
+async function migCascade() {
+  const r = await fetch('/api/filters/migrant?' + migGetParams());
+  const f = await r.json();
+  setSelect('mig-sub',    f.sub_clusters, true);
+  setSelect('mig-center', f.centers,      true);
+  setSelect('mig-sector', f.sectors,      true);
+  setSelect('mig-qp',     f.qps,          true);
+}
+async function loadMigData() {
+  const r = await fetch('/api/data/migrant?' + migGetParams());
+  const d = await r.json();
+  document.getElementById('mig-enrolled').textContent      = d.summary.enrolled.toLocaleString();
+  document.getElementById('mig-interstate').textContent    = d.summary.interstate.toLocaleString();
+  document.getElementById('mig-interdistrict').textContent = d.summary.interdistrict.toLocaleString();
+  document.getElementById('mig-local').textContent         = d.summary.local.toLocaleString();
+  document.getElementById('mig-community').textContent     = d.summary.community.toLocaleString();
+
+  function migRow(name, v, cluster, sub) {
+    return `<tr>
+      <td title="${name}">${name||'—'}</td>
+      <td>${cluster||'—'}</td><td>${sub||'—'}</td>
+      <td style="font-weight:600">${v.enrolled.toLocaleString()}</td>
+      <td style="color:var(--blue)">${v.interstate.toLocaleString()}</td>
+      <td style="color:var(--teal)">${v.interdistrict.toLocaleString()}</td>
+      <td style="color:var(--green)">${v.local.toLocaleString()}</td>
+      <td style="color:var(--purple)">${v.community.toLocaleString()}</td>
+    </tr>`;
+  }
+
+  const centerEntries = Object.entries(d.center_agg).sort((a,b)=>b[1].enrolled-a[1].enrolled);
+  document.getElementById('mig-center-tbody').innerHTML =
+    centerEntries.map(([name,v])=>migRow(name,v,v.cluster,v.sub_cluster)).join('');
+  document.getElementById('mig-center-count').textContent = centerEntries.length+' centers';
+
+  const areaEntries = Object.entries(d.area_agg).sort((a,b)=>b[1].enrolled-a[1].enrolled);
+  document.getElementById('mig-area-tbody').innerHTML =
+    areaEntries.map(([name,v])=>migRow(name,v,v.cluster,v.sub_cluster)).join('');
+  document.getElementById('mig-area-count').textContent = areaEntries.length+' areas';
+}
+function resetMig() {
+  ['mig-cluster','mig-sub','mig-center','mig-sector','mig-fy','mig-qp'].forEach(id=>document.getElementById(id).selectedIndex=0);
+  migInit();
+}
+
+// ═══ INIT ══════════════════════════════════════════════════════
+</script>
+</body>
+</html>
